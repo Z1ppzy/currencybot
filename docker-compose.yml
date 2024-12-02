@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: currency_crypto_bot
+    restart: always
+    environment:
+      - TZ=Europe/Moscow
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs

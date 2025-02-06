@@ -2,9 +2,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { ThemeProvider } from '@/providers/ThemeProvider';
-import { ThemeSwitcher } from '@/components/Theme/ThemeSwitcher';
-import { ButtonColorMenu } from '@/components/Theme/ButtonColorMenu';
 import Header from "@/components/Header";
 
 const user = {
@@ -37,12 +34,12 @@ export default function RootLayout({
         <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
 
         <body className={`${geistSans.className}`}>
-        <ThemeProvider>
-            <div className="min-h-screen bg-white dark:bg-gray-900">
+        {/*<ThemeProvider>*/}
+            <div className="min-h-screen bg-[#0d0d2b] dark:bg-gray-900">
 
                 <main>        <Header /> {children}</main>
             </div>
-        </ThemeProvider>
+        {/*</ThemeProvider>*/}
         </body>
         </html>
     );

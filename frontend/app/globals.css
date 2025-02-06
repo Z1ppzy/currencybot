@@ -2,32 +2,3 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    --primary-color: #3b82f6;
-    --background: #ffffff;
-    --text: #000000;
-  }
-
-  :root[class~="dark"] {
-    --background: #1a1a1a;
-    --text: #ffffff;
-  }
-}
-
-body {
-  background-color: var(--background);
-  color: var(--text);
-}
-
-.primary-color {
-  color: var(--primary-color);
-}
-
-.primary-bg {
-  background-color: var(--primary-color);
-}
-
-.primary-text {
-  color: var(--primary-color);
-}

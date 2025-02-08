@@ -2,7 +2,7 @@
 
 export default function Settings() {
     return (
-        <div className="p-4 flex items-center justify-between">
+        <div className="flex items-center justify-between p-4">
 
         </div>
     )

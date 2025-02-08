@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import WebApp from "@twa-dev/sdk";
+
+let WebApp: typeof import("@twa-dev/sdk").default | null = null;
+
+// Загружаем SDK только в браузере
+if (typeof window !== "undefined") {
+  WebApp = require("@twa-dev/sdk").default;
+}
 
 interface TelegramUser {
   id: number;
@@ -13,11 +19,10 @@ export function useTelegram() {
   const [user, setUser] = useState<TelegramUser | null>(null);
 
   useEffect(() => {
-    if (WebApp.initDataUnsafe?.user) {
+    if (WebApp?.initDataUnsafe?.user) {
       setUser(WebApp.initDataUnsafe.user);
     }
   }, []);
 
   return { user };
 }
-    

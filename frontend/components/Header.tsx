@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Menu } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTelegram } from "@/hooks/useTelegram";
 
 const navigation = [
@@ -17,6 +19,15 @@ const navigation = [
 export default function Header() {
   const [isOpen, setIsOpen] = useState(false);
   const { user } = useTelegram();
+  const [isTelegram, setIsTelegram] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsTelegram(window.Telegram?.WebApp !== undefined);
+      setTimeout(() => setLoading(false), 1000); // Эмуляция загрузки
+    }
+  }, []);
 
   return (
     <header className="w-full bg-[#0a061d] border-b border-gray-800 sticky top-0 z-50">
@@ -33,29 +44,43 @@ export default function Header() {
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-8">
             {navigation.map((item) => (
-              <Link key={item.name} href={item.href} className="text-gray-300 hover:text-white transition-colors">
+              <Link
+                key={item.name}
+                href={item.href}
+                className="text-gray-300 hover:text-white transition-colors"
+              >
                 {item.name}
               </Link>
             ))}
           </nav>
 
-          {/* User Info (Telegram Avatar & Username) */}
-          {user ? (
-            <div className="flex items-center gap-4">
-              <span className="text-gray-300">{user.username || user.first_name}</span>
-              {user.photo_url && (
-                <img
-                  src={user.photo_url}
-                  alt="User Avatar"
-                  className="w-10 h-10 rounded-full border-2 border-indigo-500"
-                />
-              )}
-            </div>
-          ) : (
-            <Button variant="outline" className="text-gray-300 hover:text-white">
-              Login
-            </Button>
-          )}
+          {/* User Info */}
+          <div className="flex items-center gap-4">
+            {loading ? (
+              // Скелетон загрузки
+              <>
+                <Skeleton className="h-10 w-10 rounded-full" />
+                <Skeleton className="h-6 w-24 rounded-md" />
+              </>
+            ) : user ? (
+              // Пользователь из Telegram
+              <>
+                <span className="text-gray-300">{user.username || user.first_name}</span>
+                <Avatar>
+                  <AvatarImage src={user.photo_url} alt={user.username || "User"} />
+                  <AvatarFallback>{user.first_name[0]}</AvatarFallback>
+                </Avatar>
+              </>
+            ) : (
+              // Если сайт открыт НЕ в Telegram, показываем заглушку
+              <>
+                <span className="text-gray-300">Guest</span>
+                <Avatar>
+                  <AvatarFallback>?</AvatarFallback>
+                </Avatar>
+              </>
+            )}
+          </div>
 
           {/* Mobile Menu Button */}
           <Sheet open={isOpen} onOpenChange={setIsOpen}>
@@ -80,16 +105,6 @@ export default function Header() {
                     </Link>
                   ))}
                 </nav>
-
-                {/* Mobile Auth Buttons */}
-                <div className="mt-auto p-6 space-y-4">
-                  <Button variant="outline" className="w-full text-gray-300 hover:text-white" onClick={() => setIsOpen(false)}>
-                    Login
-                  </Button>
-                  <Button className="w-full bg-indigo-500 hover:bg-indigo-600 text-white rounded-full" onClick={() => setIsOpen(false)}>
-                    Register
-                  </Button>
-                </div>
               </div>
             </SheetContent>
           </Sheet>

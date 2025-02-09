@@ -3,9 +3,10 @@
 import Link from "next/link"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Home, User, ShoppingCart, Info, Settings, Crown, Calendar, Sparkles } from "lucide-react"
+import { Home, User, ShoppingCart, Info, Settings, Crown, Calendar, Sparkles, Globe, Check } from "lucide-react"
 import { useState, useEffect } from "react"
 import { useTelegram } from "@/hooks/useTelegram"
+import { useTelegramLanguage } from "@/hooks/useTelegramLanguage";
 import { usePathname } from "next/navigation"
 import {
   DropdownMenu,
@@ -13,6 +14,10 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 
@@ -21,6 +26,19 @@ const navigation = [
   { name: "Products", href: "/profile", icon: <ShoppingCart className="w-6 h-6" /> },
   { name: "Features", href: "/test", icon: <Info className="w-6 h-6" /> },
   { name: "Profile", href: "/profile", icon: <User className="w-6 h-6" /> },
+]
+
+const languages = [
+  { code: "en", name: "English", flag: "🇬🇧" },
+  { code: "es", name: "Español", flag: "🇪🇸" },
+  { code: "fr", name: "Français", flag: "🇫🇷" },
+  { code: "de", name: "Deutsch", flag: "🇩🇪" },
+  { code: "ru", name: "Русский", flag: "🇷🇺" },
+  { code: "zh", name: "中文", flag: "🇨🇳" },
+  { code: "ja", name: "日本語", flag: "🇯🇵" },
+  { code: "ko", name: "한국어", flag: "🇰🇷" },
+  { code: "ar", name: "العربية", flag: "🇸🇦" },
+  { code: "hi", name: "हिन्दी", flag: "🇮🇳" },
 ]
 
 const hiddenBottomNavPages = ["/dashboard", "/settings"]
@@ -39,9 +57,15 @@ export default function Header() {
   const [isTelegram, setIsTelegram] = useState(false)
   const [loading, setLoading] = useState(true)
   const pathname = usePathname()
+  const { language, setLanguage } = useTelegramLanguage();
 
   // Mock join date - replace with actual data from your backend
   const joinDate = new Date("2024-02-02")
+
+  useEffect(() => {
+    console.log("User data:", user);
+    setTimeout(() => setLoading(false), 1000);
+  }, [user]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -164,6 +188,30 @@ export default function Header() {
                           <Sparkles className="w-4 h-4" />
                           <span>Upgrade Plan</span>
                         </DropdownMenuItem>
+
+                        {/* Language Selector */}
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger className="flex  items-center gap-2 focus:bg-[#2D2B52] focus:text-white transition-colors duration-200 cursor-pointer h-9 w-full">
+                            <Globe className="w-4 h-4" />
+                            <span>Language</span>
+                            <span className="ml-auto">{languages.find((lang) => lang.code === language)?.flag}</span>
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuPortal>
+                            <DropdownMenuSubContent className="bg-[#0B0A1F] border border-[#2D2B52] shadow-xl text-white">
+                              {languages.map((lang) => (
+                                <DropdownMenuItem
+                                  key={lang.code}
+                                  className="flex items-center gap-2 focus:bg-[#2D2B52] focus:text-white transition-colors duration-200 cursor-pointer h-9"
+                                  onClick={() => setLanguage(lang.code)}
+                                >
+                                  <span>{lang.flag}</span>
+                                  <span>{lang.name}</span>
+                                  {language === lang.code && <Check className="w-4 h-4 ml-auto" />}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuSubContent>
+                          </DropdownMenuPortal>
+                        </DropdownMenuSub>
                       </div>
                     </div>
                   </DropdownMenuContent>

@@ -32,7 +32,7 @@ export default function UserProfile({ joinDate, loading }: UserProfileProps) {
 
     return (
         <div className="flex items-center gap-4">
-      <span className="text-gray-400 text-sm">
+      <span className="text-gray-400 text-[13px] font-bold tracking-[-2%]">
         {user ? user.username || user.first_name : "Guest"}
       </span>
             <Avatar className="border-2 border-[#6366F1] transition-colors duration-300">

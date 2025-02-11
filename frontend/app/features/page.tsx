@@ -11,7 +11,7 @@ import {
 } from "@heroicons/react/24/outline"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel"
+import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel"
 import Autoplay from "embla-carousel-autoplay"
 import { useMediaQuery } from "@/hooks/use-media-query"
 import type { CarouselApi } from "@/components/ui/carousel"
@@ -225,7 +225,6 @@ export default function FeaturesPage() {
                     <h2 className="text-3xl font-bold mb-6">Ready to Get Started?</h2>
                     <Link href="/profile">
                     <Button
-                        size="lg"
                         className="bg-gradient-to-r from-[#6366F1] to-[#818CF8] hover:from-[#818CF8] hover:to-[#6366F1] text-white font-semibold py-2 px-6 rounded-full transition-all duration-300 transform hover:scale-105"
                     >
                         Try for Free

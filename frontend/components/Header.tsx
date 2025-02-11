@@ -37,7 +37,7 @@ import { Badge } from "@/components/ui/badge";
 const navigation = [
   { name: "Home", href: "/", icon: <Home className="w-6 h-6" /> },
   { name: "Products", href: "/products", icon: <ShoppingCart className="w-6 h-6" /> },
-  { name: "Features", href: "/test", icon: <Info className="w-6 h-6" /> },
+  { name: "Features", href: "/features", icon: <Info className="w-6 h-6" /> },
   { name: "Profile", href: "/profile", icon: <User className="w-6 h-6" /> },
 ];
 

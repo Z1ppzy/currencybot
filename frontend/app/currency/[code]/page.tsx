@@ -6,17 +6,26 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
-import { ArrowUpIcon, ArrowDownIcon, RefreshCcwIcon } from "lucide-react"
+import {
+    ArrowUpIcon,
+    ArrowDownIcon,
+    RefreshCcwIcon,
+    TrendingUpIcon,
+    TrendingDownIcon,
+    DollarSignIcon,
+    PercentIcon,
+} from "lucide-react"
 
 // Моковые данные для графика
-const generateChartData = () => {
+const generateChartData = (days: number) => {
     const data = []
     let value = 1
-    for (let i = 30; i >= 0; i--) {
+    for (let i = days; i >= 0; i--) {
         value = value + Math.random() * 0.1 - 0.05
         data.push({
-            date: `2024-02-${(30 - i).toString().padStart(2, "0")}`,
+            date: new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
             value: value.toFixed(4),
         })
     }
@@ -40,10 +49,11 @@ export default function CurrencyDetail() {
         change: 0,
         lastUpdated: "",
     })
-    const [chartData, setChartData] = useState(generateChartData())
+    const [chartData, setChartData] = useState(generateChartData(30))
     const [amount, setAmount] = useState("1")
     const [convertTo, setConvertTo] = useState("USD")
     const [convertedAmount, setConvertedAmount] = useState("0")
+    const [timeRange, setTimeRange] = useState("30")
 
     useEffect(() => {
         // В реальном приложении здесь был бы запрос к API для получения актуальных данных
@@ -61,11 +71,15 @@ export default function CurrencyDetail() {
         // Простая конвертация для демонстрации
         const converted = (Number.parseFloat(amount) * currency.rate).toFixed(4)
         setConvertedAmount(converted)
-    }, [amount, currency.rate]) // Removed unnecessary dependency: convertTo
+    }, [amount, currency.rate])
+
+    useEffect(() => {
+        setChartData(generateChartData(Number.parseInt(timeRange)))
+    }, [timeRange])
 
     const refreshData = () => {
         // В реальном приложении здесь был бы запрос к API для обновления данных
-        setChartData(generateChartData())
+        setChartData(generateChartData(Number.parseInt(timeRange)))
         setCurrency((prev) => ({
             ...prev,
             rate: prev.rate + (Math.random() * 0.02 - 0.01),
@@ -83,7 +97,7 @@ export default function CurrencyDetail() {
                             {currency.name} ({currency.code})
                         </CardTitle>
                         <Button onClick={refreshData} variant="outline">
-                            <RefreshCcwIcon className="h-4 w-4" />
+                            <RefreshCcwIcon className="h-4 w-4"/>
                         </Button>
                     </div>
                     <CardDescription className="text-gray-400">Last updated: {currency.lastUpdated}</CardDescription>
@@ -91,8 +105,9 @@ export default function CurrencyDetail() {
                 <CardContent>
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
                         <div className="text-4xl font-bold text-white mb-2 sm:mb-0">{currency.rate.toFixed(4)}</div>
-                        <div className={`flex items-center ${currency.change >= 0 ? "text-green-500" : "text-red-500"}`}>
-                            {currency.change >= 0 ? <ArrowUpIcon className="mr-1" /> : <ArrowDownIcon className="mr-1" />}
+                        <div
+                            className={`flex items-center ${currency.change >= 0 ? "text-green-500" : "text-red-500"}`}>
+                            {currency.change >= 0 ? <ArrowUpIcon className="mr-1"/> : <ArrowDownIcon className="mr-1"/>}
                             <span className="text-xl font-semibold">
                 {Math.abs(currency.change).toFixed(4)} ({((currency.change / currency.rate) * 100).toFixed(2)}%)
               </span>
@@ -110,7 +125,7 @@ export default function CurrencyDetail() {
                             />
                             <Select value={convertTo} onValueChange={setConvertTo}>
                                 <SelectTrigger className="w-full sm:w-[180px] bg-[#2D2B52] border-[#3F3D6D] text-white">
-                                    <SelectValue placeholder="Convert to" />
+                                    <SelectValue placeholder="Convert to"/>
                                 </SelectTrigger>
                                 <SelectContent className="bg-[#2D2B52] border-[#3F3D6D] text-white">
                                     {currencies
@@ -130,27 +145,96 @@ export default function CurrencyDetail() {
                 </CardContent>
             </Card>
 
-            <Card className="bg-[#1C1B33] border-[#2D2B52]">
+            <Card className="bg-[#1C1B33] border-[#2D2B52] mb-8">
                 <CardHeader>
-                    <CardTitle className="text-2xl font-bold text-white">30 Day Price Chart</CardTitle>
+                    <CardTitle className="text-2xl font-bold text-white">Price Chart</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="h-[300px] sm:h-[400px] w-full">
+                    <Tabs defaultValue="30" className="w-full" onValueChange={setTimeRange}>
+                        <TabsList className="grid w-full grid-cols-4 bg-[#2D2B52]">
+                            <TabsTrigger value="7">7D</TabsTrigger>
+                            <TabsTrigger value="30">30D</TabsTrigger>
+                            <TabsTrigger value="90">90D</TabsTrigger>
+                            <TabsTrigger value="365">1Y</TabsTrigger>
+                        </TabsList>
+                    </Tabs>
+                    <div className="h-[300px] sm:h-[400px] w-full mt-4">
                         <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={chartData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#2D2B52" />
-                                <XAxis dataKey="date" stroke="#6C7293" />
-                                <YAxis stroke="#6C7293" />
+                                <CartesianGrid strokeDasharray="3 3" stroke="#2D2B52"/>
+                                <XAxis dataKey="date" stroke="#6C7293"/>
+                                <YAxis stroke="#6C7293"/>
                                 <Tooltip
-                                    contentStyle={{ backgroundColor: "#1C1B33", border: "1px solid #2D2B52" }}
-                                    labelStyle={{ color: "#6C7293" }}
+                                    contentStyle={{backgroundColor: "#1C1B33", border: "1px solid #2D2B52"}}
+                                    labelStyle={{color: "#6C7293"}}
                                 />
-                                <Line type="monotone" dataKey="value" stroke="#6366F1" strokeWidth={2} dot={false} />
+                                <Line type="monotone" dataKey="value" stroke="#6366F1" strokeWidth={2} dot={false}/>
                             </LineChart>
                         </ResponsiveContainer>
                     </div>
                 </CardContent>
             </Card>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <Card className="bg-[#1C1B33] border-[#2D2B52]">
+                    <CardHeader>
+                        <CardTitle className="text-xl font-bold text-white">Statistics</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center">
+                                <span className="text-gray-400">24h High</span>
+                                <span className="text-white font-semibold">{(currency.rate * 1.05).toFixed(4)}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-gray-400">24h Low</span>
+                                <span className="text-white font-semibold">{(currency.rate * 0.95).toFixed(4)}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-gray-400">7d Change</span>
+                                <span
+                                    className={`font-semibold ${Math.random() > 0.5 ? "text-green-500" : "text-red-500"}`}>
+                  {(Math.random() * 10 - 5).toFixed(2)}%
+                </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-gray-400">30d Change</span>
+                                <span
+                                    className={`font-semibold ${Math.random() > 0.5 ? "text-green-500" : "text-red-500"}`}>
+                  {(Math.random() * 20 - 10).toFixed(2)}%
+                </span>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="bg-[#1C1B33] border-[#2D2B52]">
+                    <CardHeader>
+                        <CardTitle className="text-xl font-bold text-white">Market Overview</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-4">
+                            <div className="flex items-center">
+                                <TrendingUpIcon className="text-green-500 mr-2"/>
+                                <span className="text-gray-400">Bullish Trend</span>
+                            </div>
+                            <div className="flex items-center">
+                                <DollarSignIcon className="text-yellow-500 mr-2"/>
+                                <span className="text-gray-400">High Liquidity</span>
+                            </div>
+                            <div className="flex items-center">
+                                <PercentIcon className="text-blue-500 mr-2"/>
+                                <span className="text-gray-400">Low Volatility</span>
+                            </div>
+                            <div className="flex items-center">
+                                <TrendingDownIcon className="text-red-500 mr-2"/>
+                                <span className="text-gray-400">Resistance at {(currency.rate * 1.1).toFixed(4)}</span>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+            <div className='h-[90px]'></div>
         </div>
     )
 }

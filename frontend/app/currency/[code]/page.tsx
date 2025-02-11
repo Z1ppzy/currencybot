@@ -4,6 +4,8 @@ import { useState, useEffect } from "react"
 import { useParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { ArrowUpIcon, ArrowDownIcon, RefreshCcwIcon } from "lucide-react"
 
@@ -21,6 +23,14 @@ const generateChartData = () => {
     return data
 }
 
+const currencies = [
+    { code: "USD", name: "US Dollar" },
+    { code: "EUR", name: "Euro" },
+    { code: "GBP", name: "British Pound" },
+    { code: "JPY", name: "Japanese Yen" },
+    { code: "RUB", name: "Russian Ruble" },
+]
+
 export default function CurrencyDetail() {
     const params = useParams()
     const [currency, setCurrency] = useState({
@@ -31,17 +41,27 @@ export default function CurrencyDetail() {
         lastUpdated: "",
     })
     const [chartData, setChartData] = useState(generateChartData())
+    const [amount, setAmount] = useState("1")
+    const [convertTo, setConvertTo] = useState("USD")
+    const [convertedAmount, setConvertedAmount] = useState("0")
 
     useEffect(() => {
         // В реальном приложении здесь был бы запрос к API для получения актуальных данных
+        const selectedCurrency = currencies.find((c) => c.code === params.code) || currencies[0]
         setCurrency({
-            code: params.code as string,
-            name: params.code === "EUR" ? "Euro" : "US Dollar",
+            code: selectedCurrency.code,
+            name: selectedCurrency.name,
             rate: 1.1234,
             change: 0.0023,
             lastUpdated: new Date().toLocaleString(),
         })
     }, [params.code])
+
+    useEffect(() => {
+        // Простая конвертация для демонстрации
+        const converted = (Number.parseFloat(amount) * currency.rate).toFixed(4)
+        setConvertedAmount(converted)
+    }, [amount, currency.rate]) // Removed unnecessary dependency: convertTo
 
     const refreshData = () => {
         // В реальном приложении здесь был бы запрос к API для обновления данных
@@ -58,8 +78,8 @@ export default function CurrencyDetail() {
         <div className="container mx-auto px-4 py-8">
             <Card className="bg-[#1C1B33] border-[#2D2B52] mb-8">
                 <CardHeader>
-                    <div className="flex justify-between items-center">
-                        <CardTitle className="text-3xl font-bold text-white">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                        <CardTitle className="text-3xl font-bold text-white mb-2 sm:mb-0">
                             {currency.name} ({currency.code})
                         </CardTitle>
                         <Button onClick={refreshData} variant="outline">
@@ -69,13 +89,42 @@ export default function CurrencyDetail() {
                     <CardDescription className="text-gray-400">Last updated: {currency.lastUpdated}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div className="flex justify-between items-center mb-6">
-                        <div className="text-4xl font-bold text-white">{currency.rate.toFixed(4)}</div>
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+                        <div className="text-4xl font-bold text-white mb-2 sm:mb-0">{currency.rate.toFixed(4)}</div>
                         <div className={`flex items-center ${currency.change >= 0 ? "text-green-500" : "text-red-500"}`}>
                             {currency.change >= 0 ? <ArrowUpIcon className="mr-1" /> : <ArrowDownIcon className="mr-1" />}
                             <span className="text-xl font-semibold">
                 {Math.abs(currency.change).toFixed(4)} ({((currency.change / currency.rate) * 100).toFixed(2)}%)
               </span>
+                        </div>
+                    </div>
+                    <div className="mt-6">
+                        <h3 className="text-xl font-semibold text-white mb-4">Currency Converter</h3>
+                        <div className="flex flex-col sm:flex-row items-center gap-4">
+                            <Input
+                                type="number"
+                                value={amount}
+                                onChange={(e) => setAmount(e.target.value)}
+                                className="bg-[#2D2B52] border-[#3F3D6D] text-white"
+                                placeholder="Amount"
+                            />
+                            <Select value={convertTo} onValueChange={setConvertTo}>
+                                <SelectTrigger className="w-full sm:w-[180px] bg-[#2D2B52] border-[#3F3D6D] text-white">
+                                    <SelectValue placeholder="Convert to" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-[#2D2B52] border-[#3F3D6D] text-white">
+                                    {currencies
+                                        .filter((c) => c.code !== currency.code)
+                                        .map((c) => (
+                                            <SelectItem key={c.code} value={c.code}>
+                                                {c.name}
+                                            </SelectItem>
+                                        ))}
+                                </SelectContent>
+                            </Select>
+                            <div className="text-white text-xl font-semibold">
+                                = {convertedAmount} {convertTo}
+                            </div>
                         </div>
                     </div>
                 </CardContent>
@@ -86,7 +135,7 @@ export default function CurrencyDetail() {
                     <CardTitle className="text-2xl font-bold text-white">30 Day Price Chart</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="h-[400px] w-full">
+                    <div className="h-[300px] sm:h-[400px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={chartData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#2D2B52" />

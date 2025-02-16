@@ -180,8 +180,10 @@ export default function Header() {
                         <span>Preferences</span>
                       </DropdownMenuItem>
                       <DropdownMenuItem className="flex items-center gap-2 focus:bg-[#2D2B52] focus:text-white transition-colors duration-200 cursor-pointer h-9">
+                        <Link href='/products' className="flex items-center gap-2 focus:bg-[#2D2B52] focus:text-white transition-colors duration-200 cursor-pointer h-9">
                         <Sparkles className="w-4 h-4" />
                         <span>Upgrade Plan</span>
+                        </Link>
                       </DropdownMenuItem>
 
                       {/* Селектор языка */}

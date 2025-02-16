@@ -16,6 +16,7 @@ import Autoplay from "embla-carousel-autoplay"
 import { useMediaQuery } from "@/hooks/use-media-query"
 import type { CarouselApi } from "@/components/ui/carousel"
 import Link from "next/link";
+import LiveCurrencyRates from "@/components/LiveCurrencyRates";
 
 interface Feature {
     name: string;
@@ -209,17 +210,7 @@ export default function FeaturesPage() {
                     </div>
                 )}
 
-                <div className="mt-20">
-                    <div className="flex items-center justify-center mb-8">
-                        <InformationCircleIcon className="h-6 w-6 text-[#6366F1] mr-2"/>
-                        <h2 className="text-2xl font-bold">Live Currency Rates</h2>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {currencyInfo.map((currency) => (
-                            <CurrencyCard key={currency.code} currency={currency}/>
-                        ))}
-                    </div>
-                </div>
+                <LiveCurrencyRates />
 
                 <div className="text-center mt-16">
                     <h2 className="text-3xl font-bold mb-6">Ready to Get Started?</h2>

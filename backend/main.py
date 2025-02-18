@@ -1,36 +1,12 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import sqlite3
+from datetime import datetime, timedelta
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Dict, Optional
-import httpx
-import asyncio
-import xml.etree.ElementTree as ET
-from datetime import datetime
-import random
-from fastapi.background import BackgroundTasks
 
-# Модели данных
-class CurrencyRate(BaseModel):
-    code: str
-    name: str
-    rate: float
-    change: float
-    lastUpdated: str
-
-class CurrencyHistoryPoint(BaseModel):
-    date: str
-    value: str
-
-class Statistics(BaseModel):
-    high24h: float
-    low24h: float
-    change7d: float
-    change30d: float
-
-# Создаем приложение
 app = FastAPI()
 
-# Добавляем CORS middleware
+# Разрешаем запросы со всех источников
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -39,147 +15,255 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Хранилище данных
-class CurrencyStorage:
-    def __init__(self):
-        self.rates: Dict[str, CurrencyRate] = {}
-        self.history: Dict[str, List[CurrencyHistoryPoint]] = {}
-        self.last_update: Optional[str] = None
-        self.connections: List[WebSocket] = []
 
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.connections.append(websocket)
+# Модели данных для ответа
+class Statistics(BaseModel):
+    high7d: float
+    low7d: float
+    change14d: float
+    change30d: float
 
-    def disconnect(self, websocket: WebSocket):
-        self.connections.remove(websocket)
 
-    async def broadcast(self, message: dict):
-        for connection in self.connections:
-            try:
-                await connection.send_json(message)
-            except WebSocketDisconnect:
-                self.connections.remove(connection)
+class CurrencyRateResponse(BaseModel):
+    code: str
+    name: str
+    rate: float
+    change: float
+    lastUpdated: str
+    statistics: Statistics
 
-storage = CurrencyStorage()
 
-# Функции для работы с данными ЦБ РФ
-async def fetch_cbr_data():
-    url = "https://www.cbr.ru/scripts/XML_daily.asp"
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url)
-        return response.text
+DB_PATH = "currency.db"
 
-def parse_xml_rates(xml_data: str) -> Dict[str, CurrencyRate]:
-    rates = {}
-    root = ET.fromstring(xml_data)
 
-    for valute in root.findall('Valute'):
-        code = valute.find('CharCode').text
-        name = valute.find('Name').text
-        nominal = float(valute.find('Nominal').text)
-        value = float(valute.find('Value').text.replace(',', '.'))
-        rate = value / nominal
+def convert_date_format(date_str: str) -> str:
+    """
+    Преобразует дату из формата dd/mm/yyyy в формат yyyy-mm-dd
+    """
+    dt = datetime.strptime(date_str, "%d/%m/%Y")
+    return dt.strftime("%Y-%m-%d")
 
-        # Генерируем случайное изменение для демонстрации
-        change = random.uniform(-0.5, 0.5)
 
-        rates[code] = CurrencyRate(
-            code=code,
-            name=name,
-            rate=rate,
-            change=change,
-            lastUpdated=datetime.now().isoformat()
-        )
+@app.get("/api/currencies/{code}", response_model=CurrencyRateResponse)
+def get_currency(code: str):
+    code = code.upper()
+    today = datetime.now()
+    today_str = today.strftime("%d/%m/%Y")
+    iso_today = convert_date_format(today_str)
 
-    return rates
+    # Получаем вчерашнюю дату для расчёта дневного изменения
+    yesterday = today - timedelta(days=1)
+    yesterday_str = yesterday.strftime("%d/%m/%Y")
 
-# Периодическое обновление данных
-async def update_currency_data():
-    while True:
-        try:
-            xml_data = await fetch_cbr_data()
-            storage.rates = parse_xml_rates(xml_data)
-            storage.last_update = datetime.now().isoformat()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
 
-            # Отправляем обновления всем подключенным клиентам
-            await storage.broadcast({
-                "type": "rates_update",
-                "data": {code: rate.dict() for code, rate in storage.rates.items()}
-            })
+    # Для корректного сравнения дат используем преобразование:
+    date_conversion = "substr(date, 7, 4) || '-' || substr(date, 4, 2) || '-' || substr(date, 1, 2)"
 
-        except Exception as e:
-            print(f"Error updating currency data: {e}")
+    # 1. Получаем курс на выбранную (сегодняшнюю) дату
+    cursor.execute("""
+        SELECT currency_code, currency_name, value
+        FROM currency
+        WHERE date = ? AND currency_code = ?
+    """, (today_str, code))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="В базе нет данных для данной валюты на сегодня")
+    curr_code, curr_name, curr_value = row
 
-        # Ждем 12 часов перед следующим обновлением
-        await asyncio.sleep(12 * 60 * 60)
+    # 2. Рассчитываем дневное изменение (сравниваем с вчерашним курсом)
+    cursor.execute("""
+        SELECT value
+        FROM currency
+        WHERE date = ? AND currency_code = ?
+    """, (yesterday_str, code))
+    row_yesterday = cursor.fetchone()
+    if row_yesterday:
+        yesterday_value = row_yesterday[0]
+        daily_change = curr_value - yesterday_value
+    else:
+        daily_change = 0.0
 
-# API endpoints
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(update_currency_data())
+    # 3. Статистика за последние 7 дней: максимум и минимум
+    seven_days_ago = today - timedelta(days=7)
+    iso_seven_days_ago = seven_days_ago.strftime("%Y-%m-%d")
+    cursor.execute(f"""
+        SELECT MAX(value), MIN(value)
+        FROM currency
+        WHERE currency_code = ?
+          AND date({date_conversion}) BETWEEN date(?) AND date(?)
+    """, (code, iso_seven_days_ago, iso_today))
+    row_stats = cursor.fetchone()
+    high7d, low7d = row_stats if row_stats else (curr_value, curr_value)
+    if high7d is None:
+        high7d = curr_value
+    if low7d is None:
+        low7d = curr_value
 
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await storage.connect(websocket)
-    try:
-        while True:
-            data = await websocket.receive_text()
-            # Здесь можно добавить обработку входящих сообщений
-    except WebSocketDisconnect:
-        storage.disconnect(websocket)
+    # 4. Извлекаем курс 14 дней назад для расчёта изменения за 14 дней
+    date_14 = today - timedelta(days=14)
+    date_14_str = date_14.strftime("%d/%m/%Y")
+    cursor.execute("""
+        SELECT value
+        FROM currency
+        WHERE date = ? AND currency_code = ?
+    """, (date_14_str, code))
+    row_14 = cursor.fetchone()
+    if row_14:
+        rate_14 = row_14[0]
+        change14d = curr_value - rate_14
+    else:
+        change14d = 0.0
 
-@app.get("/api/currencies")
-async def get_currencies():
-    return [{"code": code, "name": rate.name} for code, rate in storage.rates.items()]
+    # 5. Извлекаем курс 30 дней назад для расчёта изменения за 30 дней
+    date_30 = today - timedelta(days=30)
+    date_30_str = date_30.strftime("%d/%m/%Y")
+    cursor.execute("""
+        SELECT value
+        FROM currency
+        WHERE date = ? AND currency_code = ?
+    """, (date_30_str, code))
+    row_30 = cursor.fetchone()
+    if row_30:
+        rate_30 = row_30[0]
+        change30d = curr_value - rate_30
+    else:
+        change30d = 0.0
 
-@app.get("/api/currencies/{code}")
-async def get_currency(code: str):
-    if code not in storage.rates:
-        return {"error": "Currency not found"}
+    conn.close()
 
-    rate = storage.rates[code]
-    return {
-        **rate.dict(),
+    response = {
+        "code": curr_code,
+        "name": curr_name,
+        "rate": curr_value,
+        "change": daily_change,
+        "lastUpdated": datetime.now().isoformat(),
         "statistics": {
-            "high24h": rate.rate * 1.05,
-            "low24h": rate.rate * 0.95,
-            "change7d": random.uniform(-5, 5),
-            "change30d": random.uniform(-10, 10)
+            "high7d": high7d,
+            "low7d": low7d,
+            "change14d": change14d,
+            "change30d": change30d
         }
     }
+    return response
+
+
+@app.get("/api/currencies")
+def get_currencies():
+    """
+    Возвращает список валют, для которых есть данные на текущую дату.
+    """
+    today_str = datetime.now().strftime("%d/%m/%Y")
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT DISTINCT currency_code, currency_name
+        FROM currency
+        WHERE date = ?
+    """, (today_str,))
+    rows = cursor.fetchall()
+    conn.close()
+    currencies = [{"code": row[0], "name": row[1]} for row in rows]
+    return currencies
+
 
 @app.get("/api/currencies/{code}/history")
-async def get_currency_history(code: str, range: str = "30"):
-    if code not in storage.rates:
-        return {"error": "Currency not found"}
-
-    # Генерируем исторические данные для демонстрации
-    days = int(range)
-    base_rate = storage.rates[code].rate
-    history = []
-
-    for i in range(days):
-        date = (datetime.now() - datetime.timedelta(days=i)).strftime("%Y-%m-%d")
-        value = base_rate * (1 + random.uniform(-0.1, 0.1))
-        history.append({"date": date, "value": f"{value:.4f}"})
-
+def get_currency_history(code: str, days: int = 30):
+    """
+    Возвращает историю курсов для выбранной валюты за указанное число дней.
+    """
+    code = code.upper()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    start_date = datetime.now() - timedelta(days=days)
+    iso_start = start_date.strftime("%Y-%m-%d")
+    date_conversion = "substr(date, 7, 4) || '-' || substr(date, 4, 2) || '-' || substr(date, 1, 2)"
+    cursor.execute(f"""
+        SELECT date, value
+        FROM currency
+        WHERE currency_code = ?
+          AND date({date_conversion}) >= date(?)
+        ORDER BY date({date_conversion}) DESC
+    """, (code, iso_start))
+    rows = cursor.fetchall()
+    conn.close()
+    history = [{"date": row[0], "value": row[1]} for row in rows]
     return history
 
+
+@app.get("/api/currencies/{code}/history_range")
+def get_currency_history_range(
+        code: str,
+        start: str = Query(..., description="Начальная дата в формате dd/mm/yyyy"),
+        end: str = Query(..., description="Конечная дата в формате dd/mm/yyyy")
+):
+    """
+    Возвращает историю курсов для выбранной валюты за указанный период.
+    Параметры:
+    - start: начальная дата в формате dd/mm/yyyy
+    - end: конечная дата в формате dd/mm/yyyy
+    """
+    code = code.upper()
+    # Преобразуем входные даты в ISO формат для сравнения
+    try:
+        iso_start = convert_date_format(start)
+        iso_end = convert_date_format(end)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Неверный формат даты. Ожидается dd/mm/yyyy.")
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    date_conversion = "substr(date, 7, 4) || '-' || substr(date, 4, 2) || '-' || substr(date, 1, 2)"
+    cursor.execute(f"""
+        SELECT date, value
+        FROM currency
+        WHERE currency_code = ?
+          AND date({date_conversion}) BETWEEN date(?) AND date(?)
+        ORDER BY date({date_conversion}) ASC
+    """, (code, iso_start, iso_end))
+    rows = cursor.fetchall()
+    conn.close()
+
+    if not rows:
+        raise HTTPException(status_code=404, detail="Нет данных за указанный период для данной валюты")
+    history = [{"date": row[0], "value": row[1]} for row in rows]
+    return {"code": code, "history": history}
+
+
 @app.get("/api/convert")
-async def convert_currency(from_currency: str, to_currency: str, amount: float):
-    if from_currency not in storage.rates or to_currency not in storage.rates:
-        return {"error": "Currency not found"}
-
-    from_rate = storage.rates[from_currency].rate
-    to_rate = storage.rates[to_currency].rate
+def convert_currency(from_currency: str, to_currency: str, amount: float):
+    """
+    Конвертация суммы из одной валюты в другую по курсу на сегодня.
+    """
+    from_currency = from_currency.upper()
+    to_currency = to_currency.upper()
+    today_str = datetime.now().strftime("%d/%m/%Y")
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT value
+        FROM currency
+        WHERE date = ? AND currency_code = ?
+    """, (today_str, from_currency))
+    row_from = cursor.fetchone()
+    cursor.execute("""
+        SELECT value
+        FROM currency
+        WHERE date = ? AND currency_code = ?
+    """, (today_str, to_currency))
+    row_to = cursor.fetchone()
+    conn.close()
+    if not row_from or not row_to:
+        raise HTTPException(status_code=404, detail="Данные для одной из валют не найдены")
+    from_rate = row_from[0]
+    to_rate = row_to[0]
     result = amount * (to_rate / from_rate)
+    return {"result": result, "rate": to_rate / from_rate}
 
-    return {
-        "result": result,
-        "rate": to_rate / from_rate
-    }
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

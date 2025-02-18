@@ -1,55 +1,165 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
+import { useEffect, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
-import { DollarSign, Euro, PoundSterling, JapaneseYenIcon as Yen, Bitcoin } from "lucide-react"
+import ReactCountryFlag from "react-country-flag"
+import { Heart } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useFavoritesStore } from "@/store/favorites"
 
-const currencies = [
-  { name: "USD", icon: DollarSign, color: "bg-green-500", label: "US Dollar" },
-  { name: "EUR", icon: Euro, color: "bg-blue-500", label: "Euro" },
-  { name: "GBP", icon: PoundSterling, color: "bg-purple-500", label: "British Pound" },
-  { name: "JPY", icon: Yen, color: "bg-red-500", label: "Japanese Yen" },
-  { name: "BTC", icon: Bitcoin, color: "bg-orange-500", label: "Bitcoin" },
-]
+interface Currency {
+  code: string
+  name: string
+}
 
 export default function CurrencySelection() {
   const router = useRouter()
+  const [currencies, setCurrencies] = useState<Currency[]>([])
+  const [loading, setLoading] = useState<boolean>(true)
+  const [activeTab, setActiveTab] = useState<string>("all")
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
+
+  const { favorites, toggleFavorite } = useFavoritesStore()
+
+  // Initial data load
+  useEffect(() => {
+    if (isInitialLoad) {
+      // Set initial tab based on favorites existence
+      if (favorites.length > 0) {
+        setActiveTab("favorites")
+      }
+      setIsInitialLoad(false)
+    }
+    fetchCurrencies()
+  }, [isInitialLoad, favorites.length])
+
+  async function fetchCurrencies() {
+    try {
+      const res = await fetch("https://api.heavenlyweiner.ru/api/currencies")
+      if (!res.ok) {
+        throw new Error("Ошибка при получении валют")
+      }
+      const data: Currency[] = await res.json()
+      const filteredData = data.filter((currency) => currency.code !== "UAH")
+      setCurrencies(filteredData)
+    } catch (error) {
+      console.error("Ошибка:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleCurrencySelect = (currencyCode: string) => {
     router.push(`/currency/${currencyCode}`)
   }
 
+  const handleToggleFavorite = (currencyCode: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    toggleFavorite(currencyCode)
+    // Only switch to "all" tab if removing the last favorite
+    if (favorites.length === 1 && favorites.includes(currencyCode)) {
+      setActiveTab("all")
+    }
+  }
+
+  const CurrencyCard = ({ currency }: { currency: Currency }) => (
+    <div
+      className="h-28 relative group cursor-pointer rounded-lg border border-gray-600 bg-gray-800 hover:bg-gray-700 transition-all duration-300 ease-in-out transform hover:scale-105"
+      onClick={() => handleCurrencySelect(currency.code)}
+    >
+      <div className="flex flex-col items-center justify-center h-full space-y-2">
+        <div className="rounded-full p-3 bg-gray-600">
+          <ReactCountryFlag
+            countryCode={currency.code.slice(0, 2)}
+            svg
+            style={{ width: "1.5em", height: "1.5em" }}
+            title={currency.name}
+          />
+        </div>
+        <span className="font-semibold text-white">{currency.code}</span>
+        <span className="text-xs text-gray-400">{currency.name}</span>
+      </div>
+      <div
+        className="absolute top-1 right-1 opacity-70 group-hover:opacity-100 transition-opacity"
+        onClick={(e) => handleToggleFavorite(currency.code, e)}
+      >
+        <Heart
+          className={`h-4 w-4 cursor-pointer ${
+            favorites.includes(currency.code)
+              ? "fill-red-500 text-red-500"
+              : "text-gray-400 hover:text-red-400"
+          }`}
+        />
+      </div>
+    </div>
+  )
+
+  const renderFavoritesList = () => {
+    if (favorites.length === 0) {
+      return (
+        <div className="text-center py-8">
+          <p className="text-gray-400 text-lg mb-2">У вас нет избранных валют 😢</p>
+          <p className="text-gray-500">
+            Добавьте валюты в избранное, нажав на иконку сердечка
+          </p>
+        </div>
+      )
+    }
+
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+        {currencies
+          .filter((currency) => favorites.includes(currency.code))
+          .map((currency) => (
+            <CurrencyCard key={currency.code} currency={currency} />
+          ))}
+      </div>
+    )
+  }
+
   return (
-    <div className="container mx-auto px-4 py-12 min-h-screen ">
+    <div className="container mx-auto px-4 py-12 min-h-screen">
       <Card className="bg-gray-800 border-gray-700 shadow-xl mb-8">
         <CardContent className="p-6">
-          <h1 className="text-3xl font-bold text-white mb-2">Select a Currency</h1>
-          <p className="text-gray-400 mb-6">Choose a currency to view detailed information and exchange rates.</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-            {currencies.map((currency) => (
-              <Button
-                key={currency.name}
-                variant="outline"
-                className="h-28 hover:bg-gray-700 transition-all duration-300 ease-in-out transform hover:scale-105 border-gray-600"
-                onClick={() => handleCurrencySelect(currency.name)}
-              >
-                <div className="flex flex-col items-center justify-center space-y-2">
-                  <div className={`rounded-full p-3 ${currency.color}`}>
-                    <currency.icon className="h-8 w-8 text-white" />
-                  </div>
-                  <span className="font-semibold text-white">{currency.name}</span>
-                  <span className="text-xs text-gray-400">{currency.label}</span>
+          <h1 className="text-3xl font-bold text-white mb-2">Выберите валюту</h1>
+          <p className="text-gray-400 mb-6">
+            Выберите валюту для просмотра детальной информации и обменных курсов.
+          </p>
+          {loading ? (
+            <p className="text-white">Загрузка...</p>
+          ) : (
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="mb-4">
+                <TabsTrigger value="all" className="relative">
+                  Все валюты
+                </TabsTrigger>
+                <TabsTrigger value="favorites" className="relative">
+                  Избранные
+                  {favorites.length > 0 && (
+                    <span className="ml-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                      {favorites.length}
+                    </span>
+                  )}
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="all">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+                  {currencies.map((currency) => (
+                    <CurrencyCard key={currency.code} currency={currency} />
+                  ))}
                 </div>
-              </Button>
-            ))}
-          </div>
+              </TabsContent>
+              <TabsContent value="favorites">
+                {renderFavoritesList()}
+              </TabsContent>
+            </Tabs>
+          )}
         </CardContent>
       </Card>
       <div className="text-center text-gray-500 text-sm">
-        Data is for demonstration purposes only. Real-time rates may vary.
+        Данные предоставлены для демонстрационных целей. Реальные курсы могут отличаться.
       </div>
     </div>
   )
 }
-

@@ -15,7 +15,7 @@ class CurrencyDataFetcher:
             return False
 
     def validate_currency_code(self, code: str) -> bool:
-        valid_currencies = {'USD', 'EUR', 'RUB', 'GBP', 'CNY', 'JPY'}
+        valid_currencies = {'USD', 'EUR', 'RUB', 'GBP', 'CNY', 'JPY', 'SEK'}
         return code.upper() in valid_currencies
 
     def get_date_input(self) -> None:
@@ -47,9 +47,9 @@ class CurrencyDataFetcher:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
 
-            # Получаем текущий курс на выбранную дату
+            # Получаем текущий курс с учетом поля nominal
             cursor.execute("""
-                SELECT currency_code, currency_name, value 
+                SELECT currency_code, currency_name, value, nominal
                 FROM currency 
                 WHERE date = ? AND currency_code = ?
             """, (date_str, currency_code))
@@ -57,11 +57,13 @@ class CurrencyDataFetcher:
 
             if rows:
                 for row in rows:
-                    currency_code, currency_name, value = row
+                    currency_code, currency_name, value, nominal = row
+                    # Вычисляем фактический курс за единицу валюты
+                    actual_rate = value / nominal
                     print(f"\nДанные на выбранную дату:")
                     print(f"Код валюты: {currency_code}")
                     print(f"Название: {currency_name}")
-                    print(f"Курс: {value:.4f}")
+                    print(f"Курс: {actual_rate:.4f}")
 
                     # Преобразуем выбранную дату в объект datetime и ISO-формат
                     date_obj = datetime.strptime(date_str, "%d/%m/%Y")
@@ -70,46 +72,46 @@ class CurrencyDataFetcher:
                     # Функция для преобразования даты из БД (dd/mm/yyyy) в ISO формат внутри запроса:
                     date_conversion = "substr(date, 7, 4) || '-' || substr(date, 4, 2) || '-' || substr(date, 1, 2)"
 
-                    # Статистика за 7 дней
-                    seven_days_ago = (date_obj - timedelta(days=7))
+                    # Статистика за 7 дней (учитываем деление на номинал)
+                    seven_days_ago = date_obj - timedelta(days=7)
                     seven_days_ago_iso = seven_days_ago.strftime("%Y-%m-%d")
                     cursor.execute(f"""
-                        SELECT MAX(value), MIN(value)
+                        SELECT MAX(value/nominal), MIN(value/nominal)
                         FROM currency 
-                        WHERE currency_code = ?
+                        WHERE currency_code = ? 
                           AND date({date_conversion}) <= date(?)
                           AND date({date_conversion}) >= date(?)
                     """, (currency_code, date_iso, seven_days_ago_iso))
                     high7d, low7d = cursor.fetchone()
 
                     # Статистика за 14 дней
-                    fourteen_days_ago = (date_obj - timedelta(days=14))
+                    fourteen_days_ago = date_obj - timedelta(days=14)
                     fourteen_days_ago_iso = fourteen_days_ago.strftime("%Y-%m-%d")
                     cursor.execute(f"""
-                        SELECT MAX(value), MIN(value)
+                        SELECT MAX(value/nominal), MIN(value/nominal)
                         FROM currency 
-                        WHERE currency_code = ?
+                        WHERE currency_code = ? 
                           AND date({date_conversion}) <= date(?)
                           AND date({date_conversion}) >= date(?)
                     """, (currency_code, date_iso, fourteen_days_ago_iso))
                     high14d, low14d = cursor.fetchone()
 
-                    # Статистика за 30 дней
-                    thirty_days_ago = (date_obj - timedelta(days=30))
+                    # Статистика за 30 дней (только максимум)
+                    thirty_days_ago = date_obj - timedelta(days=30)
                     thirty_days_ago_iso = thirty_days_ago.strftime("%Y-%m-%d")
                     cursor.execute(f"""
-                        SELECT MAX(value)
+                        SELECT MAX(value/nominal)
                         FROM currency 
-                        WHERE currency_code = ?
+                        WHERE currency_code = ? 
                           AND date({date_conversion}) <= date(?)
                           AND date({date_conversion}) >= date(?)
                     """, (currency_code, date_iso, thirty_days_ago_iso))
                     high30d = cursor.fetchone()[0]
 
                     print("\nСтатистика за последние периоды:")
-                    print(f"7 дней - Макс: {high7d if high7d is not None else value:.4f}, Мин: {low7d if low7d is not None else value:.4f}")
-                    print(f"14 дней - Макс: {high14d if high14d is not None else value:.4f}, Мин: {low14d if low14d is not None else value:.4f}")
-                    print(f"30 дней - Макс: {high30d if high30d is not None else value:.4f}")
+                    print(f"7 дней - Макс: {high7d if high7d is not None else actual_rate:.4f}, Мин: {low7d if low7d is not None else actual_rate:.4f}")
+                    print(f"14 дней - Макс: {high14d if high14d is not None else actual_rate:.4f}, Мин: {low14d if low14d is not None else actual_rate:.4f}")
+                    print(f"30 дней - Макс: {high30d if high30d is not None else actual_rate:.4f}")
 
             else:
                 print("Нет данных на указанную дату или валюту.")

@@ -55,23 +55,12 @@ interface CurrencyData {
     statistics: CurrencyStatistics
 }
 
-// Моковая история для графика (демонстрация)
-const generateChartData = (days: number) => {
-    const data = []
-    let value = 1
-    for (let i = days; i >= 0; i--) {
-        value = value + Math.random() * 0.1 - 0.05
-        data.push({
-            date: new Date(Date.now() - i * 24 * 60 * 60 * 1000)
-              .toISOString()
-              .split("T")[0],
-            value: Number(value.toFixed(4)),
-        })
-    }
-    return data
+// Интерфейс для данных графика
+interface ChartDataPoint {
+    date: string
+    value: number
 }
 
-// Дополнительный список валют для конвертера (при необходимости можно заменить)
 const availableCurrencies = [
     { code: "USD", name: "US Dollar" },
     { code: "EUR", name: "Euro" },
@@ -97,13 +86,14 @@ export default function CurrencyDetail() {
             change30d: 0,
         },
     })
-    const [chartData, setChartData] = useState(generateChartData(30))
+    const [chartData, setChartData] = useState<ChartDataPoint[]>([])
     const [amount, setAmount] = useState("1")
     const [convertTo, setConvertTo] = useState("USD")
     const [convertedAmount, setConvertedAmount] = useState("0")
-    const [timeRange, setTimeRange] = useState("30")
+    // Значение времени выбирается пользователем: 7, 30, 90 или 365 дней
+    const [timeRange, setTimeRange] = useState("7")
 
-    // Функция для запроса данных с API
+    // Функция для запроса данных валюты
     const fetchCurrencyData = async () => {
         try {
             const res = await fetch(`https://api.heavenlyweiner.ru/api/currencies/${currencyCode}`)
@@ -117,25 +107,44 @@ export default function CurrencyDetail() {
         }
     }
 
+    // Функция для запроса данных графика с API
+    const fetchChartData = async (days: number) => {
+        try {
+            // Предполагается, что API возвращает массив объектов { date, value }
+            const res = await fetch(`https://api.heavenlyweiner.ru/api/currencies/${currencyCode}/history?days=${days}`)
+            if (!res.ok) {
+                throw new Error("Ошибка при получении данных графика")
+            }
+            const data: ChartDataPoint[] = await res.json()
+            // Сортируем данные по дате по возрастанию (от старых к текущим)
+            const sortedData = data.sort(
+              (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+            )
+            setChartData(sortedData)
+        } catch (error) {
+            console.error("Ошибка запроса графика:", error)
+        }
+    }
+
     useEffect(() => {
-        // При загрузке компонента и изменении кода валюты делаем запрос к API
+        // Запрашиваем данные валюты при загрузке или изменении кода валюты
         fetchCurrencyData()
     }, [currencyCode])
 
     useEffect(() => {
-        // Обновляем сумму конвертации при изменении входной суммы или курса валюты
+        // Обновляем сумму конвертации при изменении входной суммы или курса
         const converted = (Number.parseFloat(amount) * currency.rate).toFixed(4)
         setConvertedAmount(converted)
     }, [amount, currency.rate])
 
     useEffect(() => {
-        setChartData(generateChartData(Number.parseInt(timeRange)))
-    }, [timeRange])
+        // При изменении выбранного периода (timeRange) запрашиваем данные графика
+        fetchChartData(Number.parseInt(timeRange))
+    }, [timeRange, currencyCode])
 
     const refreshData = () => {
-        // При нажатии на кнопку «Refresh» перезапрашиваем данные с API и обновляем график
         fetchCurrencyData()
-        setChartData(generateChartData(Number.parseInt(timeRange)))
+        fetchChartData(Number.parseInt(timeRange))
     }
 
     return (
@@ -146,11 +155,7 @@ export default function CurrencyDetail() {
                       <CardTitle className="text-3xl font-bold text-white mb-2 sm:mb-0">
                           {currency.name} ({currency.code})
                       </CardTitle>
-                      <Button
-                        onClick={refreshData}
-                        variant="outline"
-                        className="bg-gray-800 text-white hover:bg-gray-700"
-                      >
+                      <Button onClick={refreshData} variant="outline" className="bg-gray-800 text-white hover:bg-gray-700">
                           <RefreshCcwIcon className="h-4 w-4 mr-2" />
                           Refresh
                       </Button>
@@ -162,21 +167,12 @@ export default function CurrencyDetail() {
               <CardContent>
                   <div className="flex flex-col sm:flex-row justify-between items-center mb-6">
                       <div className="text-4xl font-bold text-white">
-                          {currency.rate.toFixed(4)}
+                          {currency.rate.toFixed(4)} ₽
                       </div>
-                      <div
-                        className={`flex items-center ${
-                          currency.change >= 0 ? "text-green-400" : "text-red-400"
-                        }`}
-                      >
-                          {currency.change >= 0 ? (
-                            <ArrowUpIcon className="mr-1" />
-                          ) : (
-                            <ArrowDownIcon className="mr-1" />
-                          )}
+                      <div className={`flex items-center ${currency.change >= 0 ? "text-green-400" : "text-red-400"}`}>
+                          {currency.change >= 0 ? <ArrowUpIcon className="mr-1" /> : <ArrowDownIcon className="mr-1" />}
                           <span className="text-xl font-semibold">
-                {Math.abs(currency.change).toFixed(4)} (
-                              {((currency.change / currency.rate) * 100).toFixed(2)}%)
+                {Math.abs(currency.change).toFixed(4)} ({((currency.change / currency.rate) * 100).toFixed(2)}%)
               </span>
                       </div>
                   </div>
@@ -221,34 +217,18 @@ export default function CurrencyDetail() {
                   </CardTitle>
               </CardHeader>
               <CardContent>
-                  <Tabs
-                    defaultValue="30"
-                    className="w-full"
-                    onValueChange={setTimeRange}
-                  >
+                  <Tabs defaultValue="7" className="w-full" onValueChange={(value) => setTimeRange(value)}>
                       <TabsList className="grid w-full grid-cols-4 bg-gray-800">
-                          <TabsTrigger
-                            value="7"
-                            className="data-[state=active]:bg-gray-700 text-white"
-                          >
+                          <TabsTrigger value="7" className="data-[state=active]:bg-gray-700 text-white">
                               7D
                           </TabsTrigger>
-                          <TabsTrigger
-                            value="30"
-                            className="data-[state=active]:bg-gray-700 text-white"
-                          >
+                          <TabsTrigger value="30" className="data-[state=active]:bg-gray-700 text-white">
                               30D
                           </TabsTrigger>
-                          <TabsTrigger
-                            value="90"
-                            className="data-[state=active]:bg-gray-700 text-white"
-                          >
+                          <TabsTrigger value="90" className="data-[state=active]:bg-gray-700 text-white">
                               90D
                           </TabsTrigger>
-                          <TabsTrigger
-                            value="365"
-                            className="data-[state=active]:bg-gray-700 text-white"
-                          >
+                          <TabsTrigger value="365" className="data-[state=active]:bg-gray-700 text-white">
                               1Y
                           </TabsTrigger>
                       </TabsList>
@@ -260,19 +240,10 @@ export default function CurrencyDetail() {
                               <XAxis dataKey="date" stroke="#9CA3AF" />
                               <YAxis stroke="#9CA3AF" />
                               <Tooltip
-                                contentStyle={{
-                                    backgroundColor: "#1F2937",
-                                    border: "1px solid #374151",
-                                }}
+                                contentStyle={{ backgroundColor: "#1F2937", border: "1px solid #374151" }}
                                 labelStyle={{ color: "#9CA3AF" }}
                               />
-                              <Line
-                                type="monotone"
-                                dataKey="value"
-                                stroke="#60A5FA"
-                                strokeWidth={2}
-                                dot={false}
-                              />
+                              <Line type="monotone" dataKey="value" stroke="#60A5FA" strokeWidth={2} dot={false} />
                           </LineChart>
                       </ResponsiveContainer>
                   </div>
@@ -302,25 +273,13 @@ export default function CurrencyDetail() {
                           </div>
                           <div className="flex justify-between items-center">
                               <span className="text-gray-400">14d Change</span>
-                              <span
-                                className={`font-semibold ${
-                                  currency.statistics.change14d >= 0
-                                    ? "text-green-400"
-                                    : "text-red-400"
-                                }`}
-                              >
+                              <span className={`font-semibold ${currency.statistics.change14d >= 0 ? "text-green-400" : "text-red-400"}`}>
                   {currency.statistics.change14d.toFixed(4)}
                 </span>
                           </div>
                           <div className="flex justify-between items-center">
                               <span className="text-gray-400">30d Change</span>
-                              <span
-                                className={`font-semibold ${
-                                  currency.statistics.change30d >= 0
-                                    ? "text-green-400"
-                                    : "text-red-400"
-                                }`}
-                              >
+                              <span className={`font-semibold ${currency.statistics.change30d >= 0 ? "text-green-400" : "text-red-400"}`}>
                   {currency.statistics.change30d.toFixed(4)}
                 </span>
                           </div>
